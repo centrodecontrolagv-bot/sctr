@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control SCTR - AGV Seguridad Patrimonial</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        :root {
+            --agv-blue: #002855;
+            --agv-red: #e63946;
+        }
+        .bg-agv-blue { background-color: var(--agv-blue); }
+        .text-agv-blue { color: var(--agv-blue); }
+        .border-agv-blue { border-color: var(--agv-blue); }
+        .bg-agv-red { background-color: var(--agv-red); }
+        
+        .card-shadow { box-shadow: 0 10px 25px -5px rgba(0, 40, 85, 0.1), 0 8px 10px -6px rgba(0, 40, 85, 0.1); }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade { animation: fadeIn 0.4s ease-out forwards; }
+        
+        /* Barra de desplazamiento personalizada para el historial */
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #002855; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans pb-20">
+
+    <div class="max-w-xl mx-auto p-4 md:pt-10">
+        <!-- Encabezado Corporativo -->
+        <div class="bg-white rounded-3xl card-shadow p-6 mb-6 flex items-center justify-between border-b-8 border-agv-blue">
+            <div class="flex items-center gap-4">
+                <div class="w-14 h-14 bg-slate-50 rounded-xl flex items-center justify-center overflow-hidden border border-slate-100">
+                    <img src="logo-bg-D4L5zxIW.png" alt="Logo AGV" class="max-w-full max-h-full object-contain" onerror="this.src='https://placehold.co/100x100?text=AGV'">
+                </div>
+                <div>
+                    <h1 class="text-2xl font-black text-agv-blue leading-none tracking-tighter uppercase">SCTR CONTROL</h1>
+                    <p class="text-agv-red font-bold text-[10px] mt-1 uppercase tracking-widest">AGV Seguridad Patrimonial</p>
+                </div>
+            </div>
+            <div id="dataBadge" class="text-right">
+                <span id="dbCount" class="text-[9px] font-black bg-slate-100 text-slate-500 px-3 py-1 rounded-full border border-slate-200 block">SIN DATOS</span>
+                <span id="currentDateDisplay" class="text-[8px] font-bold text-slate-400 uppercase mt-1"></span>
+            </div>
+        </div>
+
+        <!-- Sección de Sincronización -->
+        <details class="mb-6 group" id="importPanel" open>
+            <summary class="list-none cursor-pointer">
+                <div class="bg-agv-blue text-white p-4 rounded-2xl flex items-center justify-between hover:bg-slate-800 transition-all shadow-lg border border-white/10">
+                    <span class="text-xs font-black uppercase tracking-widest flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                        Paso 1: Sincronizar Base de Datos
+                    </span>
+                    <span class="group-open:rotate-180 transition-transform">▼</span>
+                </div>
+            </summary>
+            <div class="bg-white p-6 rounded-b-2xl border-x border-b border-slate-200 shadow-inner space-y-4">
+                <p class="text-[11px] text-slate-500 italic">Copia y pega las columnas de tu Excel aquí:</p>
+                <textarea id="rawPaste" rows="3" class="w-full bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-4 text-[10px] font-mono focus:border-agv-blue focus:outline-none transition-all" placeholder="DNI	NOMBRE	VENCIMIENTO..."></textarea>
+                <button onclick="processData()" class="w-full bg-agv-red text-white py-4 rounded-xl font-black text-xs uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shadow-md">
+                    Actualizar Base de Datos
+                </button>
+                <div id="importMsg" class="hidden text-center text-[10px] font-bold p-2 rounded-lg"></div>
+            </div>
+        </details>
+
+        <!-- Buscador -->
+        <div class="bg-white rounded-3xl card-shadow p-6 mb-8 border border-slate-100">
+            <div class="flex items-center justify-between mb-5">
+                <h2 class="text-[11px] font-black text-slate-400 uppercase tracking-widest">Consulta de Ingreso</h2>
+                <button onclick="toggleScanner()" class="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl border border-slate-200 text-agv-blue font-black text-[10px] hover:bg-slate-100">
+                    📷 ESCANEAR QR/DNI
+                </button>
+            </div>
+
+            <div id="scannerUI" class="hidden mb-6 bg-black rounded-2xl overflow-hidden shadow-2xl ring-4 ring-agv-blue/5">
+                <div id="reader"></div>
+            </div>
+
+            <div class="relative group">
+                <input type="text" id="dniSearch" placeholder="Ingresar DNI..." 
+                    class="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-5 text-3xl font-black text-slate-800 focus:border-agv-blue focus:bg-white focus:outline-none transition-all placeholder:text-slate-300">
+                <button onclick="searchDNI()" class="absolute right-2.5 top-2.5 bottom-2.5 bg-agv-blue text-white px-6 rounded-xl font-black text-xs hover:bg-slate-800 transition-all active:scale-95 shadow-lg">
+                    BUSCAR
+                </button>
+            </div>
+            <p id="searchError" class="hidden text-center text-agv-red font-black text-[10px] mt-4 uppercase animate-pulse">⚠️ No registrado en el sistema</p>
+        </div>
+
+        <!-- Ficha de Resultados -->
+        <div id="resultCard" class="hidden animate-fade mb-8">
+            <div class="bg-white rounded-3xl overflow-hidden card-shadow border border-slate-200">
+                <div id="topHeader" class="px-6 py-4 flex justify-between items-center">
+                    <span class="text-[10px] font-black uppercase tracking-widest opacity-60">Estado de SCTR</span>
+                    <div id="statusBadge" class="px-4 py-1.5 rounded-full font-black text-[10px] uppercase shadow-sm">---</div>
+                </div>
+
+                <div class="p-8 space-y-6">
+                    <div class="text-center">
+                        <p id="resName" class="text-3xl font-black text-agv-blue leading-tight uppercase">---</p>
+                        <div class="inline-flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-lg mt-2">
+                            <span class="text-[10px] font-bold text-slate-400 uppercase">DNI:</span>
+                            <span id="resDni" class="text-sm font-mono font-black text-agv-red">---</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center">
+                            <span class="text-[8px] font-black text-blue-500 uppercase mb-1 block">Pensión</span>
+                            <p id="resVencP" class="text-xs font-mono font-black text-slate-700">--/--/--</p>
+                        </div>
+                        <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center">
+                            <span class="text-[8px] font-black text-red-500 uppercase mb-1 block">Salud</span>
+                            <p id="resVencS" class="text-xs font-mono font-black text-slate-700">--/--/--</p>
+                        </div>
+                    </div>
+
+                    <div id="mainIndicator" class="p-8 rounded-2xl text-center border-2 transition-all">
+                        <h3 id="resStatus" class="text-4xl font-black italic uppercase leading-none tracking-tighter">---</h3>
+                        <p id="resSub" class="text-[10px] font-bold uppercase tracking-widest mt-2 opacity-60">---</p>
+                    </div>
+
+                    <div id="registerAction" class="hidden pt-2">
+                        <button onclick="confirmEntry()" class="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black text-lg uppercase tracking-widest hover:bg-emerald-700 active:scale-95 transition-all shadow-xl flex items-center justify-center gap-3">
+                            <span>CONFIRMAR INGRESO</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Historial Detallado -->
+        <div class="bg-white rounded-3xl card-shadow overflow-hidden border border-slate-200">
+            <div class="bg-agv-blue p-5 flex justify-between items-center">
+                <div>
+                    <h2 class="text-white font-black text-xs uppercase tracking-widest leading-none">Log de Ingresos</h2>
+                    <p class="text-[9px] text-white/50 font-bold mt-1 uppercase tracking-tighter">Historial con Fecha y Hora</p>
+                </div>
+                <button onclick="exportHistory()" class="bg-white/10 hover:bg-white/20 text-white text-[9px] font-black px-4 py-2 rounded-xl border border-white/10 transition-colors uppercase flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0L8 8m4-4v12" /></svg>
+                    Exportar
+                </button>
+            </div>
+            <div class="max-h-80 overflow-y-auto custom-scroll">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-50 border-b border-slate-100 sticky top-0 z-10">
+                        <tr>
+                            <th class="p-3 text-[9px] font-black text-slate-400 uppercase">Fecha / Hora</th>
+                            <th class="p-3 text-[9px] font-black text-slate-400 uppercase">Colaborador</th>
+                            <th class="p-3 text-[9px] font-black text-slate-400 uppercase">DNI</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody" class="divide-y divide-slate-50">
+                        <tr id="emptyHistory">
+                            <td colspan="3" class="p-10 text-center text-[10px] font-bold text-slate-300 uppercase italic">Esperando registros...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let workerDB = [];
+        let entryHistory = [];
+        let html5QrcodeScanner = null;
+        let currentWorker = null;
+
+        // Actualizar fecha actual en el encabezado
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        document.getElementById('currentDateDisplay').innerText = new Date().toLocaleDateString('es-ES', options);
+
+        function processData() {
+            const raw = document.getElementById('rawPaste').value.trim();
+            if (!raw) return;
+
+            const lines = raw.split('\n');
+            const sep = lines[0].includes('\t') ? '\t' : (lines[0].includes(';') ? ';' : ',');
+            const headers = lines[0].split(sep).map(h => h.trim().toUpperCase());
+
+            const iDni = headers.findIndex(h => h.includes("DNI") || h.includes("DOCUMENTO"));
+            const iNom = headers.findIndex(h => h.includes("NOMBRE") || h.includes("TRABAJADOR"));
+            const iVencP = headers.findIndex(h => h.includes("VENCIMIENTO") && h.includes("PENSION"));
+            const iVencS = headers.findIndex(h => h.includes("VENCIMIENTO") && h.includes("SALUD"));
+
+            const data = [];
+            for (let i = 1; i < lines.length; i++) {
+                const row = lines[i].split(sep).map(c => c.trim().replace(/^"|"$/g, ''));
+                if (row.length < 2) continue;
+
+                if (row[iDni]) {
+                    data.push({
+                        dni: row[iDni],
+                        nombre: row[iNom] || "---",
+                        vencP: row[iVencP] || "",
+                        vencS: row[iVencS] || ""
+                    });
+                }
+            }
+
+            if (data.length > 0) {
+                workerDB = data;
+                document.getElementById('dbCount').innerText = `${data.length} TRABAJADORES`;
+                document.getElementById('dbCount').classList.replace('bg-slate-100', 'bg-agv-blue');
+                document.getElementById('dbCount').classList.replace('text-slate-500', 'text-white');
+                
+                const msg = document.getElementById('importMsg');
+                msg.innerText = `Sincronización Exitosa: ${data.length} registros.`;
+                msg.className = "text-center text-[10px] font-black p-2 rounded-lg bg-green-50 text-green-600 block";
+                setTimeout(() => document.getElementById('importPanel').removeAttribute('open'), 1000);
+            }
+        }
+
+        function parseExcelDate(str) {
+            if (!str) return null;
+            const clean = str.split(' ')[0].replace(/[^\d\/-]/g, '/').replace(/\./g, '/');
+            const parts = clean.split('/');
+            if (parts.length !== 3) return null;
+            let d = parseInt(parts[0]), m = parseInt(parts[1]) - 1, y = parseInt(parts[2]);
+            if (y < 100) y += 2000;
+            return new Date(y, m, d, 23, 59, 59);
+        }
+
+        function searchDNI() {
+            const query = document.getElementById('dniSearch').value.trim();
+            currentWorker = workerDB.find(w => w.dni == query);
+            const card = document.getElementById('resultCard');
+            const error = document.getElementById('searchError');
+            const regBox = document.getElementById('registerAction');
+
+            if (currentWorker) {
+                error.classList.add('hidden');
+                card.classList.remove('hidden');
+                document.getElementById('resName').innerText = currentWorker.nombre;
+                document.getElementById('resDni').innerText = currentWorker.dni;
+                document.getElementById('resVencP').innerText = currentWorker.vencP || "NO REGISTRA";
+                document.getElementById('resVencS').innerText = currentWorker.vencS || "NO REGISTRA";
+
+                const today = new Date();
+                const dP = parseExcelDate(currentWorker.vencP);
+                const dS = parseExcelDate(currentWorker.vencS);
+                const isVigente = (dP && dP >= today) && (dS && dS >= today);
+                
+                const indicator = document.getElementById('mainIndicator');
+                const badge = document.getElementById('statusBadge');
+                const stText = document.getElementById('resStatus');
+                const stSub = document.getElementById('resSub');
+                const topHeader = document.getElementById('topHeader');
+
+                if (isVigente) {
+                    stText.innerText = "ACCESO PERMITIDO";
+                    stText.className = "text-4xl font-black italic uppercase leading-none tracking-tighter text-emerald-600";
+                    stSub.innerText = "SCTR VIGENTE";
+                    indicator.className = "p-8 rounded-2xl text-center border-2 border-emerald-100 bg-emerald-50";
+                    badge.innerText = "✓ VIGENTE";
+                    badge.className = "px-4 py-1.5 rounded-full font-black text-[10px] uppercase bg-emerald-500 text-white";
+                    topHeader.className = "px-6 py-4 flex justify-between items-center bg-emerald-50/50 border-b border-emerald-100";
+                    regBox.classList.remove('hidden');
+                } else {
+                    stText.innerText = "ACCESO DENEGADO";
+                    stText.className = "text-4xl font-black italic uppercase leading-none tracking-tighter text-agv-red";
+                    stSub.innerText = "DOCUMENTO VENCIDO";
+                    indicator.className = "p-8 rounded-2xl text-center border-2 border-red-100 bg-red-50";
+                    badge.innerText = "⚠ VENCIDO";
+                    badge.className = "px-4 py-1.5 rounded-full font-black text-[10px] uppercase bg-agv-red text-white";
+                    topHeader.className = "px-6 py-4 flex justify-between items-center bg-red-50/50 border-b border-red-100";
+                    regBox.classList.add('hidden');
+                }
+            } else {
+                card.classList.add('hidden');
+                error.classList.remove('hidden');
+            }
+        }
+
+        function confirmEntry() {
+            if (!currentWorker) return;
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const timeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            const entry = {
+                fecha: dateStr,
+                hora: timeStr,
+                nombre: currentWorker.nombre,
+                dni: currentWorker.dni
+            };
+
+            entryHistory.unshift(entry);
+            updateHistoryTable();
+            
+            const btn = document.querySelector('#registerAction button');
+            btn.innerHTML = "✓ REGISTRADO";
+            btn.classList.replace('bg-emerald-600', 'bg-slate-800');
+            
+            setTimeout(() => {
+                btn.innerHTML = `<span>CONFIRMAR INGRESO</span><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>`;
+                btn.classList.replace('bg-slate-800', 'bg-emerald-600');
+                document.getElementById('resultCard').classList.add('hidden');
+                document.getElementById('dniSearch').value = "";
+                document.getElementById('dniSearch').focus();
+            }, 800);
+        }
+
+        function updateHistoryTable() {
+            const body = document.getElementById('historyBody');
+            const empty = document.getElementById('emptyHistory');
+            if (entryHistory.length > 0) empty.classList.add('hidden');
+            
+            body.innerHTML = '';
+            entryHistory.forEach(item => {
+                const row = document.createElement('tr');
+                row.className = "hover:bg-slate-50 transition-colors border-b border-slate-50";
+                row.innerHTML = `
+                    <td class="p-3">
+                        <div class="text-[9px] font-black text-slate-800 leading-none">${item.hora}</div>
+                        <div class="text-[8px] font-bold text-slate-400 mt-1 uppercase">${item.fecha}</div>
+                    </td>
+                    <td class="p-3 text-[10px] font-black text-slate-700 uppercase leading-tight">${item.nombre}</td>
+                    <td class="p-3 text-[10px] font-mono font-bold text-agv-red">${item.dni}</td>
+                `;
+                body.appendChild(row);
+            });
+        }
+
+        function exportHistory() {
+            if (entryHistory.length === 0) return;
+            let csvContent = "data:text/csv;charset=utf-8,FECHA,HORA,NOMBRE,DNI\n";
+            entryHistory.forEach(e => csvContent += `${e.fecha},${e.hora},${e.nombre},${e.dni}\n`);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodeURI(csvContent));
+            link.setAttribute("download", `Ingresos_AGV_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function toggleScanner() {
+            const ui = document.getElementById('scannerUI');
+            if (ui.classList.contains('hidden')) {
+                ui.classList.remove('hidden');
+                html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+                html5QrcodeScanner.render((text) => {
+                    const match = text.match(/\d{7,10}/);
+                    document.getElementById('dniSearch').value = match ? match[0] : text;
+                    stopScanner();
+                    searchDNI();
+                });
+            } else { stopScanner(); }
+        }
+
+        function stopScanner() {
+            if (html5QrcodeScanner) { html5QrcodeScanner.clear(); document.getElementById('scannerUI').classList.add('hidden'); }
+        }
+
+        document.getElementById('dniSearch').addEventListener('keypress', (e) => e.key === 'Enter' && searchDNI());
+    </script>
+</body>
+</html>
